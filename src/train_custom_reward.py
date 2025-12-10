@@ -18,7 +18,7 @@ def train_custom(cfg_path="config/config_custom.yaml"):
     os.makedirs("logs/custom", exist_ok=True)
 
     for trial in range(1, cfg['num_trials'] + 1):
-        env = gym.make(cfg['environment'])
+        env = gym.make(cfg['environment'])  #wraps the original environment with customRewardWrapper
         algo = ALGOS[cfg['algorithm']]
         env = CustomRewardWrapper(env, cfg)
         model = algo("MlpPolicy", env, verbose=1, tensorboard_log=f"logs/custom/{cfg['algorithm']}_trial{trial}/")

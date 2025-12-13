@@ -17,7 +17,8 @@ def train_baseline(cfg_path="config/config_baseline.yaml"):
     os.makedirs("logs/baseline", exist_ok=True)
 
     for trial in range(1, cfg['num_trials'] + 1):
-        env = gym.make(cfg['environment'])
+        max_steps = cfg.get('max_episode_steps', 999)
+        env = gym.make(cfg['environment'], max_episode_steps=max_steps)
         algo = ALGOS[cfg['algorithm']]
         model = algo("MlpPolicy", env, verbose=1, tensorboard_log=f"logs/baseline/{cfg['algorithm']}_trial{trial}/")
         cb = CheckpointCallback(save_freq=cfg["checkpoint_freq"],

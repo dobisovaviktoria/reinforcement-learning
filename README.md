@@ -84,7 +84,26 @@ Navigate to the project directory
 ```
 **Note:** Consider running each training in a new notebook so the training runs in parallel. It will save you time.
 
-7. Copy the new files into your local project
+7. Download logs and results and paste them into your local project
+
+```
+import shutil
+from google.colab import files
+
+# Create ZIP archives
+print("Creating ZIP files...")
+shutil.make_archive('/content/results', 'zip', '/content/project/reinforcement_learning/results')
+shutil.make_archive('/content/logs', 'zip', '/content/project/reinforcement_learning/logs')
+
+# Download both ZIPs
+print("Downloading results.zip...")
+files.download('/content/results.zip')
+
+print("Downloading logs.zip...")
+files.download('/content/logs.zip')
+
+print("Downloads complete!")
+```
 
 ### Option 2: Run locally
 

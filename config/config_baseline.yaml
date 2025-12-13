@@ -1,5 +1,7 @@
 environment: "MountainCarContinuous-v0"
-algorithm: "SAC"
-timesteps: 200000
-checkpoint_freq: 20000
+algorithm: "PPO"
+timesteps: 500000
+checkpoint_freq: 50000
 num_trials: 3
+max_episode_steps: 1500
+ent_coef: 0.01

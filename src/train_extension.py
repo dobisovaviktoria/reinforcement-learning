@@ -18,7 +18,8 @@ def train_extension(cfg_path="config/config_extension.yaml"):
     os.makedirs("logs/extension", exist_ok=True)
 
     for trial in range(1, cfg['num_trials'] + 1):
-        env = gym.make(cfg['environment'])
+        max_steps = cfg.get('max_episode_steps', 999)
+        env = gym.make(cfg['environment'], max_episode_steps=max_steps)
         algo = ALGOS[cfg['algorithm']]
         env = CustomRewardWrapper(env, cfg)
         model = algo("MlpPolicy", env, verbose=1, tensorboard_log=f"logs/extension/{cfg['algorithm']}_trial{trial}/")

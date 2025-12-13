@@ -1,10 +1,14 @@
 environment: "MountainCarContinuous-v0"
-algorithm: "SAC"
-timesteps: 200000
-checkpoint_freq: 20000
+algorithm: "PPO"
+timesteps: 500000
+checkpoint_freq: 50000
 num_trials: 3
+max_episode_steps: 1500
+ent_coef: 0.01
 
 reward_shaping:
-  position_coeff: 20.0
-  velocity_coeff: 1.0
+  goal_position: 0.45
+  position_scale: 0.1
+  velocity_scale: 2.0
   energy_penalty: 0.1
+  success_bonus: 100.0

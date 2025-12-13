@@ -2,6 +2,8 @@ import os
 import numpy as np
 import gymnasium as gym
 from stable_baselines3 import PPO, SAC, A2C, DQN
+from custom_env_wrapper import CustomRewardWrapper
+from utils import load_config
 
 # Supported algorithms
 ALGOS = {
@@ -11,9 +13,8 @@ ALGOS = {
     "DQN": DQN
 }
 
-def evaluate_model(model, env_name, episodes=10):
+def evaluate_model(model, env, episodes=10):
     """Evaluate a trained model deterministically and compute client-friendly metrics."""
-    env = gym.make(env_name)
 
     rewards = []
     ep_lengths = []
@@ -50,8 +51,6 @@ def evaluate_model(model, env_name, episodes=10):
         if obs[0] >= 0.45:
             successes += 1
 
-    env.close()
-
     mean_reward = np.mean(rewards)
     std_reward = np.std(rewards)
     mean_ep_len = np.mean(ep_lengths)
@@ -72,6 +71,19 @@ def eval_all(root_dir, env_name, experiments, num_trials=3, eval_episodes=10):
             continue
 
         print(f"\n===== Evaluating {exp.upper()} =====")
+
+        cfg_path = f"../config/config_{exp}.yaml"
+        if os.path.exists(cfg_path):
+            cfg = load_config(cfg_path)
+            max_steps = cfg.get('max_episode_steps', 999)
+            use_custom_reward = (exp in ['custom', 'extension'])
+            print(f"  Config: max_steps={max_steps}, custom_reward={use_custom_reward}")
+        else:
+            print(f"  [WARNING] Config not found: {cfg_path}, using defaults")
+            max_steps = 999
+            use_custom_reward = False
+            cfg = {}
+
         exp_results = []
 
         for trial in range(1, num_trials + 1):
@@ -96,14 +108,21 @@ def eval_all(root_dir, env_name, experiments, num_trials=3, eval_episodes=10):
             print(f"  Evaluating {model_filename} ...")
             model = algo_class.load(model_path)
 
+            env = gym.make(env_name, max_episode_steps=max_steps)
+
+            if use_custom_reward:
+                env = CustomRewardWrapper(env, cfg)
+
             mean_reward, std_reward, mean_ep_len, mean_energy, success_rate = evaluate_model(
-                model, env_name, eval_episodes
+                model, env, eval_episodes
             )
             print(f"    ->Mean Reward: {mean_reward:.2f}, Std: {std_reward:.2f}, "
                   f"Avg Length: {mean_ep_len:.1f}, Avg Energy: {mean_energy:.2f}, "
                   f"Success Rate: {success_rate:.1f}%")
 
             exp_results.append((mean_reward, std_reward, mean_ep_len, mean_energy, success_rate))
+
+            env.close()
 
         results[exp] = exp_results
 

@@ -1,5 +1,5 @@
 environment: "MountainCarContinuous-v0"
-algorithm: "A2C"
+algorithm: "SAC"
 timesteps: 500000
 checkpoint_freq: 50000
 num_trials: 3

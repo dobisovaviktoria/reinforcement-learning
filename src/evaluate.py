@@ -13,55 +13,104 @@ ALGOS = {
     "DQN": DQN
 }
 
-def evaluate_model(model, env, episodes=10):
-    """Evaluate a trained model deterministically and compute client-friendly metrics."""
 
-    rewards = []
-    ep_lengths = []
-    energies = []
-    successes = 0
+def evaluate(model_path, env_id, episodes=10):
+
+    # Containers for metrics
+    rewards = []                 # total reward per episode
+    ep_lengths = []              # steps per episode
+    energies = []                # sum of squared actions per episode
+    successes = 0                # count of successful episodes
+    reward_per_energy_list = []  # reward efficiency metric
+    steps_to_success = []        # steps taken in successful episodes
+    energy_per_success = []      # energy spent in successful episodes
+    action_magnitudes = []       # norm of actions
+    action_smoothness = []       # difference between consecutive actions
+    max_positions = []           # max position per episode
 
     for ep in range(episodes):
-        obs, _ = env.reset()
-        done = False
+        obs, _ = env_id.reset()
+        finished = False
         total_reward = 0
-        ep_len = 0
         total_energy = 0
+        ep_len = 0
+        prev_action = None
+        max_pos = obs[0]  # track max position for learning progress
 
-        while not done:
-            action, _ = model.predict(obs, deterministic=True)
-            obs, reward, terminated, truncated, _ = env.step(action)
+        while not finished:
+            action, _ = model_path.predict(obs, deterministic=True)
+            obs, reward, terminated, truncated, _ = env_id.step(action)
 
-            total_reward += reward
-            ep_len += 1
+            # Update basic metrics
+            total_reward += reward  # total reward
+            ep_len += 1             # episode length
 
-            # Energy: sum of squared actions (works for scalar or array actions)
+            # Energy calculation
             if isinstance(action, np.ndarray):
-                total_energy += np.sum(np.square(action))
+                total_energy += np.sum(np.square(action))  # sum of squared actions
+                action_magnitudes.append(np.linalg.norm(action))  # magnitude of action
             else:
                 total_energy += action ** 2
+                action_magnitudes.append(abs(action))
 
-            done = terminated or truncated
+            # Action smoothness (difference from previous action)
+            if prev_action is not None:
+                if isinstance(action, np.ndarray):
+                    action_smoothness.append(np.linalg.norm(action - prev_action))
+                else:
+                    action_smoothness.append(abs(action - prev_action))
+            prev_action = action
 
+            # Update max position reached
+            max_pos = max(max_pos, obs[0])
+
+            # Episode finished
+            finished = terminated or truncated
+
+        # Append per-episode metrics
         rewards.append(total_reward)
         ep_lengths.append(ep_len)
         energies.append(total_energy)
+        reward_per_energy_list.append(total_reward / (total_energy + 1e-8))  # avoid div by 0
+        max_positions.append(max_pos)
 
-        # Success detection for MountainCarContinuous-v0 (goal position >= 0.45)
+        # Success detection for MountainCarContinuous-v0 (goal >= 0.45)
         if obs[0] >= 0.45:
             successes += 1
+            steps_to_success.append(ep_len)         # steps taken to success
+            energy_per_success.append(total_energy) # energy spent to success
 
-    mean_reward = np.mean(rewards)
-    std_reward = np.std(rewards)
-    mean_ep_len = np.mean(ep_lengths)
-    mean_energy = np.mean(energies)
-    success_rate = successes / episodes * 100
+    # Aggregate metrics across all episodes
+    mean_reward = np.mean(rewards)                        # average reward
+    std_reward = np.std(rewards)                          # reward consistency
+    mean_ep_len = np.mean(ep_lengths)                     # average episode length
+    mean_energy = np.mean(energies)                       # average energy spent
+    success_rate = successes / episodes * 100             # success rate (%)
+    mean_reward_per_energy = np.mean(reward_per_energy_list)  # reward efficiency
+    mean_steps_to_success = np.mean(steps_to_success) if steps_to_success else np.nan
+    mean_energy_per_success = np.mean(energy_per_success) if energy_per_success else np.nan
+    mean_action_magnitude = np.mean(action_magnitudes) if action_magnitudes else np.nan
+    mean_action_smoothness = np.mean(action_smoothness) if action_smoothness else np.nan
+    mean_max_position = np.mean(max_positions)           # learning progress indicator
 
-    return mean_reward, std_reward, mean_ep_len, mean_energy, success_rate
+    return {
+        "mean_reward": mean_reward,
+        "std_reward": std_reward,
+        "mean_ep_len": mean_ep_len,
+        "mean_energy": mean_energy,
+        "success_rate": success_rate,
+        "reward_per_energy": mean_reward_per_energy,
+        "mean_steps_to_success": mean_steps_to_success,
+        "mean_energy_per_success": mean_energy_per_success,
+        "mean_action_magnitude": mean_action_magnitude,
+        "mean_action_smoothness": mean_action_smoothness,
+        "mean_max_position": mean_max_position
+    }
 
 
 def eval_all(root_dir, env_name, experiments, num_trials=3, eval_episodes=10):
-    """Evaluate all models inside the results folders with key metrics."""
+    """Evaluate all models in the results folder and print metrics."""
+
     results = {}
 
     for exp in experiments:
@@ -72,6 +121,7 @@ def eval_all(root_dir, env_name, experiments, num_trials=3, eval_episodes=10):
 
         print(f"\n===== Evaluating {exp.upper()} =====")
 
+        # Load config if exists
         cfg_path = f"../config/config_{exp}.yaml"
         if os.path.exists(cfg_path):
             cfg = load_config(cfg_path)
@@ -97,7 +147,6 @@ def eval_all(root_dir, env_name, experiments, num_trials=3, eval_episodes=10):
                 print(f"   No model found for trial {trial} in {exp_path}")
                 continue
 
-            model_path = os.path.join(exp_path, model_filename)
             algo_name = model_filename.split("_")[0]
             algo_class = ALGOS.get(algo_name)
 
@@ -106,25 +155,41 @@ def eval_all(root_dir, env_name, experiments, num_trials=3, eval_episodes=10):
                 continue
 
             print(f"  Evaluating {model_filename} ...")
-            model = algo_class.load(model_path)
+            model = algo_class.load(os.path.join(exp_path, model_filename))
 
             env = gym.make(env_name, max_episode_steps=max_steps)
-
             if use_custom_reward:
                 env = CustomRewardWrapper(env, cfg)
 
-            mean_reward, std_reward, mean_ep_len, mean_energy, success_rate = evaluate_model(
-                model, env, eval_episodes
-            )
-            print(f"    ->Mean Reward: {mean_reward:.2f}, Std: {std_reward:.2f}, "
-                  f"Avg Length: {mean_ep_len:.1f}, Avg Energy: {mean_energy:.2f}, "
-                  f"Success Rate: {success_rate:.1f}%")
+            metrics = evaluate(model, env, eval_episodes)
 
-            exp_results.append((mean_reward, std_reward, mean_ep_len, mean_energy, success_rate))
+            # Print metrics per trial
+            print(f"    ->Mean Reward: {metrics['mean_reward']:.2f}, Std: {metrics['std_reward']:.2f}")
+            print(f"    ->Avg Episode Length: {metrics['mean_ep_len']:.1f}")
+            print(f"    ->Avg Energy Used: {metrics['mean_energy']:.2f}")
+            print(f"    ->Success Rate: {metrics['success_rate']:.1f}%")
+            print(f"    ->Reward per Unit Energy: {metrics['reward_per_energy']:.3f}")
+            print(f"    ->Steps to Success: {metrics['mean_steps_to_success']:.1f}")
+            print(f"    ->Energy per Success: {metrics['mean_energy_per_success']:.2f}")
+            print(f"    ->Mean Action Magnitude: {metrics['mean_action_magnitude']:.3f}")
+            print(f"    ->Mean Action Smoothness: {metrics['mean_action_smoothness']:.3f}")
+            print(f"    ->Max Position Reached: {metrics['mean_max_position']:.3f}")
 
+            exp_results.append(metrics)
             env.close()
 
         results[exp] = exp_results
+
+    # Final summary across all trials
+    print("\n\n========== FINAL SUMMARY ==========")
+    for exp, scores in results.items():
+        if not scores:
+            continue
+
+        print(f"\n{exp.upper()}:")
+        for key in scores[0].keys():
+            values = [m[key] for m in scores]
+            print(f"  Overall {key.replace('_', ' ').title()}: {np.nanmean(values):.3f}")
 
     return results
 
@@ -140,24 +205,3 @@ if __name__ == "__main__":
         num_trials=3,
         eval_episodes=10
     )
-
-    # Summary printout
-    print("\n\n========== FINAL SUMMARY ==========")
-    for exp, scores in final_results.items():
-        if not scores:
-            continue
-
-        mean_rewards = [m for m, s, l, e, sr in scores]
-        std_rewards = [s for m, s, l, e, sr in scores]
-        mean_lengths = [l for m, s, l, e, sr in scores]
-        mean_energies = [e for m, s, l, e, sr in scores]
-        success_rates = [sr for m, s, l, e, sr in scores]
-
-        print(f"\n{exp.upper()}:")
-
-        print(f"  Overall Mean Reward: {np.mean(mean_rewards):.2f}")
-        print(f"  Overall Reward Std: {np.mean(std_rewards):.2f}")
-        print(f"  Overall Avg Episode Length: {np.mean(mean_lengths):.1f}")
-        print(f"  Overall Avg Energy Used: {np.mean(mean_energies):.2f}")
-        print(f"  Overall Success Rate: {np.mean(success_rates):.1f}%")
-

@@ -130,3 +130,10 @@ In case you don't have tensorboard installed on your device, first run:
 ```
 pip install tensorboard
 ```
+
+## Evaluation
+To see the model comparison (outside Tensorboard results) run this command: 
+
+```
+python .\src\evaluate.py   
+```

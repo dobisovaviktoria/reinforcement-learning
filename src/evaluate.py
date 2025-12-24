@@ -122,7 +122,7 @@ def eval_all(root_dir, env_name, experiments, num_trials=3, eval_episodes=10):
         print(f"\n===== Evaluating {exp.upper()} =====")
 
         # Load config if exists
-        cfg_path = f"../config/config_{exp}.yaml"
+        cfg_path = f"config/config_{exp}.yaml"
         if os.path.exists(cfg_path):
             cfg = load_config(cfg_path)
             max_steps = cfg.get('max_episode_steps', 999)

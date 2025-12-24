@@ -29,7 +29,7 @@ def evaluate(model_path, env_id, episodes=10):
     max_positions = []           # max position per episode
 
     for ep in range(episodes):
-        obs, _ = env_id.reset()
+        obs, _ = env_id.reset(seed=42 + ep)
         finished = False
         total_reward = 0
         total_energy = 0

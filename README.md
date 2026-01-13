@@ -1,4 +1,4 @@
-# Reinforcement Learning Project
+# Reinforcement Learning
 
 ## Authors
 
